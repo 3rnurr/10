@@ -1,3 +1,101 @@
+# **МАҢЫЗДЫ: СТУДЕНТТЕРГЕ АРНАЛҒАН ТАПСЫРМАЛАР!**
+
+Дағдыларды бекітуге арналған практикалық тапсырмалар. Қателерден қорықпа, бұл оқу процесінің бір бөлігі!
+
+---
+
+# **Жоба 10/10: Микроблог**
+
+Аутентификацияны, CRUD-операцияларды және деректерді файлға сақтауды біріктіретін қарапайым көп пайдаланушылы микроблогты жасауға арналған соңғы жоба.
+
+---
+
+**🚀 Технологиялар**
+
+* **Бэкенд**: FastAPI (тәуелділіктерді өңдеу, CRUD, файлдармен жұмыс)
+* **Фронтенд**: Next.js (күйді басқару, қорғалған беттер, шартты рендеринг)
+* **Негізгі концепциялар**: Аутентификацияны, CRUD-ты және деректердің тұрақтылығын бір қосымшада біріктіру. Контентке иелік құқығын тексеру.
+
+**✨ Функционал**
+
+* Екі алдын ала конфигурацияланған пайдаланушы (user1, user2).
+* Токен (пайдаланушы аты) беретін кіру жүйесі.
+* Барлық пайдаланушылардың посттары көрінетін басты таспа.
+* Авторланған пайдаланушылар жаңа посттар жасай алады.
+* Пайдаланушылар *тек өздерінің* посттарын жоя алады.
+* Посттар туралы деректер `posts.json` файлында сақталады және қайта жүктегеннен кейін жоғалмайды.
+
+# **Сенің міндетің:**
+
+## Бұл жобаны одан әрі дамыту үшін соңғы сынақ!
+
+# **Сенің тапсырмаң:**
+
+# 1. **Нақты ДБ-ға көшу:**
+> * ## `posts.json` файлын толыққанды дерекқорға ауыстыр. SQLite — бастау үшін тамаша таңдау, өйткені ол жеке серверді қажет етпейді.
+> * ## Дерекқормен жұмыс істеу үшін FastAPI-да SQLAlchemy немесе SQLModel пайдалан (кестелерді жасау, сессиялар, сұраныстар). Бұл кәсіби өсу үшін ең маңызды қадам.
+
+# 2. **"Лайктарды" іске асыру:**
+> * ## ДБ-да `user_id` және `post_id` байланыстыратын лайктар үшін жаңа кесте жаса.
+> * ## `POST /api/posts/{post_id}/like` және `DELETE /api/posts/{post_id}/like` эндпоинттерін қос.
+> * ## Фронтендте әр постқа "лайк" батырмасын және лайктар санауышын қос.
+
+# 3. **Пайдаланушы профильдері:**
+> * ## Next.js-те динамикалық `app/users/[username]/page.tsx` бетін жаса.
+> * ## Бұл бетте тек осы пайдаланушының барлық посттары көрсетілуі керек.
+> * ## FastAPI-да бір автордың посттарын алу үшін `GET /api/users/{username}/posts` эндпоинтін қос.
+
+---
+
+# **IMPORTANT: TASKS FOR STUDENTS!**
+
+These are practical assignments to consolidate your skills. Don't be afraid of mistakes; they are part of the learning process!
+
+---
+
+# **Project 10/10: Microblog**
+
+The final project, combining authentication, CRUD operations, and data persistence to a file, to create a simple multi-user microblog.
+
+---
+
+**🚀 Technologies**
+
+* **Backend**: FastAPI (dependency handling, CRUD, file operations)
+* **Frontend**: Next.js (state management, protected pages, conditional rendering)
+* **Key Concepts**: Integration of authentication, CRUD, and data persistence in one application. Checking content ownership rights.
+
+**✨ Functionality**
+
+* Two pre-configured users (user1, user2).
+* Login system that issues a token (username).
+* Main feed showing posts from all users.
+* Authenticated users can create new posts.
+* Users can delete *only their own* posts.
+* Post data is saved in `posts.json` and does not disappear after a restart.
+
+# **Your Task:**
+
+## This is your final challenge to turn this project into something bigger!
+
+# **Your Mission:**
+
+# 1. **Migrate to a Real DB:**
+> * ## Replace `posts.json` with a full-fledged database. SQLite is an ideal choice to start with, as it doesn't require a separate server.
+> * ## Use SQLAlchemy or SQLModel in FastAPI to work with the database (table creation, sessions, queries). This is the most important step for professional growth.
+
+# 2. **Implement "Likes":**
+> * ## Create a new table in the DB for likes that will link `user_id` and `post_id`.
+> * ## Add `POST /api/posts/{post_id}/like` and `DELETE /api/posts/{post_id}/like` endpoints.
+> * ## On the frontend, add a "like" button and a like counter to each post.
+
+# 3. **User Profiles:**
+> * ## Create a dynamic page `app/users/[username]/page.tsx` in Next.js.
+> * ## This page should display all posts from only that specific user.
+> * ## Add a `GET /api/users/{username}/posts` endpoint in FastAPI to retrieve posts by a single author.
+
+---
+
 # **ВАЖНО: ЗАДАЧИ ДЛЯ СТУДЕНТОВ!**
 
 Перед тобой практические задания для закрепления навыков. Не бойся ошибок, это часть обучения!
