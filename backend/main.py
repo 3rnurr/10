@@ -5,7 +5,10 @@ from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Annotated
-import aiofiles
+from sqlalchemy import create_engine, Column, String, DateTime, Integer, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.sql import func
 
 app = FastAPI()
 
@@ -13,7 +16,28 @@ app = FastAPI()
 origins = ["http://localhost:3000"]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-DB_FILE = "data/posts.json"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./blog.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class PostDB(Base):
+    __tablename__ = "posts"
+
+    id = Column(String, primary_key=True, index=True)
+    text = Column(String)
+    timestamp = Column(DateTime, default=func.now())
+    owner_id = Column(String)
+    owner_username = Column(String)
+
+class LikeDB(Base):
+    __tablename__ = "likes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String)
+    post_id = Column(String, ForeignKey("posts.id"))
+
+Base.metadata.create_all(bind=engine)
 
 # --- Фейковые данные пользователей ---
 # В реальном приложении пароли должны быть хэшированы
@@ -29,6 +53,7 @@ class Post(BaseModel):
     timestamp: datetime
     owner_id: str
     owner_username: str
+    likes_count: int = 0
 
 class PostCreate(BaseModel):
     text: str
@@ -37,16 +62,13 @@ class User(BaseModel):
     id: str
     username: str
 
-# --- Вспомогательные функции для работы с файлом ---
-async def read_posts() -> List[Post]:
-    async with aiofiles.open(DB_FILE, mode='r', encoding='utf-8') as f:
-        content = await f.read()
-        return [Post(**item) for item in json.loads(content)] if content else []
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-async def write_posts(posts: List[Post]):
-    export_data = [post.model_dump(mode='json') for post in posts]
-    async with aiofiles.open(DB_FILE, mode='w', encoding='utf-8') as f:
-        await f.write(json.dumps(export_data, indent=4, ensure_ascii=False))
 
 # --- Аутентификация ---
 async def get_current_user(authorization: Annotated[str, Header()]) -> User:
@@ -73,28 +95,46 @@ async def login(form_data: Dict[str, str]):
 
 # --- Эндпоинты для постов ---
 @app.get("/api/posts", response_model=List[Post])
-async def list_posts():
-    posts = await read_posts()
-    return sorted(posts, key=lambda p: p.timestamp, reverse=True)
+async def list_posts(db: Session = Depends(get_db)):
+    posts = db.query(PostDB).order_by(PostDB.timestamp.desc()).all()
+    result = []
+    for post in posts:
+        likes_count = db.query(LikeDB).filter(LikeDB.post_id == post.id).count()
+        result.append(Post(
+            id=post.id,
+            text=post.text,
+            timestamp=post.timestamp,
+            owner_id=post.owner_id,
+            owner_username=post.owner_username,
+            likes_count=likes_count
+        ))
+    return result
 
 @app.post("/api/posts", response_model=Post, status_code=201)
-async def create_post(post_data: PostCreate, current_user: Annotated[User, Depends(get_current_user)]):
-    posts = await read_posts()
-    new_post = Post(
+async def create_post(post_data: PostCreate, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
+    new_post = PostDB(
         id=str(uuid.uuid4()),
         text=post_data.text,
         timestamp=datetime.now(timezone.utc),
         owner_id=current_user.id,
         owner_username=current_user.username
     )
-    posts.append(new_post)
-    await write_posts(posts)
-    return new_post
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
+
+    return Post(
+        id=new_post.id,
+        text=new_post.text,
+        timestamp=new_post.timestamp,
+        owner_id=new_post.owner_id,
+        owner_username=new_post.owner_username,
+        likes_count=0
+    )
 
 @app.delete("/api/posts/{post_id}", status_code=204)
-async def delete_post(post_id: str, current_user: Annotated[User, Depends(get_current_user)]):
-    posts = await read_posts()
-    post_to_delete = next((p for p in posts if p.id == post_id), None)
+async def delete_post(post_id: str, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
+    post_to_delete = db.query(PostDB).filter(PostDB.id == post_id).first()
 
     if not post_to_delete:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
@@ -102,5 +142,62 @@ async def delete_post(post_id: str, current_user: Annotated[User, Depends(get_cu
     if post_to_delete.owner_id != current_user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized to delete this post")
 
-    posts.remove(post_to_delete)
-    await write_posts(posts)
+    # Удаляем лайки к посту
+    db.query(LikeDB).filter(LikeDB.post_id == post_id).delete()
+    db.delete(post_to_delete)
+    db.commit()
+
+# --- Эндпоинты для лайков (пункт 2) ---
+@app.post("/api/posts/{post_id}/like")
+async def like_post(post_id: str, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
+    # Проверяем, что пост существует
+    post = db.query(PostDB).filter(PostDB.id == post_id).first()
+    if not post:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
+    
+    # Проверяем, не лайкнул ли уже пользователь этот пост
+    existing_like = db.query(LikeDB).filter(LikeDB.post_id == post_id, LikeDB.user_id == current_user.id).first()
+    if existing_like:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Already liked this post")
+    
+    # Создаем лайк
+    new_like = LikeDB(user_id=current_user.id, post_id=post_id)
+    db.add(new_like)
+    db.commit()
+    
+    return {"message": "Post liked successfully"}
+
+@app.delete("/api/posts/{post_id}/like")
+async def unlike_post(post_id: str, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
+    # Проверяем, что пост существует
+    post = db.query(PostDB).filter(PostDB.id == post_id).first()
+    if not post:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
+    
+    # Ищем лайк пользователя
+    like = db.query(LikeDB).filter(LikeDB.post_id == post_id, LikeDB.user_id == current_user.id).first()
+    if not like:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Post not liked")
+    
+    # Удаляем лайк
+    db.delete(like)
+    db.commit()
+    
+    return {"message": "Post unliked successfully"}
+
+# --- Эндпоинт для постов пользователя (пункт 3) ---
+@app.get("/api/users/{username}/posts", response_model=List[Post])
+async def get_user_posts(username: str, db: Session = Depends(get_db)):
+    posts = db.query(PostDB).filter(PostDB.owner_username == username).order_by(PostDB.timestamp.desc()).all()
+    result = []
+    for post in posts:
+        likes_count = db.query(LikeDB).filter(LikeDB.post_id == post.id).count()
+        result.append(Post(
+            id=post.id,
+            text=post.text,
+            timestamp=post.timestamp,
+            owner_id=post.owner_id,
+            owner_username=post.owner_username,
+            likes_count=likes_count
+        ))
+    return result

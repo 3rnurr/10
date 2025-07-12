@@ -3,7 +3,14 @@ import { useState, useEffect, FormEvent } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 
-interface Post { id: string; text: string; timestamp: string; owner_id: string; owner_username: string; }
+interface Post { 
+  id: string; 
+  text: string; 
+  timestamp: string; 
+  owner_id: string; 
+  owner_username: string; 
+  likes_count: number;
+}
 interface User { id: string; username: string; }
 
 const API_URL = 'http://localhost:8000/api';
@@ -50,9 +57,24 @@ export default function HomePage() {
     const token = localStorage.getItem('auth_token');
     if (window.confirm("Вы уверены, что хотите удалить этот пост?")) {
         try {
-            await axios.delete(`<span class="math-inline">\{API\_URL\}/posts/</span>{postId}`, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.delete(`${API_URL}/posts/${postId}`, { headers: { Authorization: `Bearer ${token}` } });
             fetchPosts(); // Обновляем ленту
         } catch (error) { console.error("Failed to delete post:", error); }
+    }
+  };
+
+  const handleLikePost = async (postId: string) => {
+    const token = localStorage.getItem('auth_token');
+    try {
+      await axios.post(`${API_URL}/posts/${postId}/like`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      fetchPosts(); // Обновляем ленту
+    } catch (error) { 
+      console.error("Failed to like post:", error);
+      // Если уже лайкнул, то убираем лайк
+      try {
+        await axios.delete(`${API_URL}/posts/${postId}/like`, { headers: { Authorization: `Bearer ${token}` } });
+        fetchPosts();
+      } catch (unlikeError) { console.error("Failed to unlike post:", unlikeError); }
     }
   };
 
@@ -84,7 +106,22 @@ export default function HomePage() {
           <div key={post.id} className="bg-white p-4 rounded-lg shadow relative">
             <p>{post.text}</p>
             <div className="text-xs text-gray-500 mt-2">
-              <strong>{post.owner_username}</strong> - {new Date(post.timestamp).toLocaleString()}
+              <strong>
+                <button 
+                  onClick={() => router.push(`/users/${post.owner_username}`)}
+                  className="hover:text-blue-600 underline"
+                >
+                  {post.owner_username}
+                </button>
+              </strong> - {new Date(post.timestamp).toLocaleString()}
+            </div>
+            <div className="flex items-center mt-2">
+              <button 
+                onClick={() => handleLikePost(post.id)} 
+                className="text-red-500 hover:text-red-700 mr-2"
+              >
+                ❤️ {post.likes_count}
+              </button>
             </div>
             {user && user.id === post.owner_id && (
               <button onClick={() => handleDeletePost(post.id)} className="absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold">✕</button>
